@@ -15,6 +15,9 @@
  ******************************************************************************/
 package it.gmariotti.changelibs.library.view;
 
+import android.annotation.TargetApi;
+import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.os.AsyncTask;
@@ -24,11 +27,9 @@ import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ListView;
-import android.widget.Toast;
 
 import it.gmariotti.changelibs.R;
 import it.gmariotti.changelibs.library.Constants;
-import it.gmariotti.changelibs.library.Util;
 import it.gmariotti.changelibs.library.internal.ChangeLog;
 import it.gmariotti.changelibs.library.internal.ChangeLogAdapter;
 import it.gmariotti.changelibs.library.internal.ChangeLogRow;
@@ -48,7 +49,15 @@ public class ChangeLogListView extends ListView implements AdapterView.OnItemCli
     protected int mRowLayoutId= Constants.mRowLayoutId;
     protected int mRowHeaderLayoutId=Constants.mRowHeaderLayoutId;
     protected int mChangeLogFileResourceId=Constants.mChangeLogFileResourceId;
-    protected String mChangeLogFileResourceUrl=null;
+
+    public interface FinishedLoadingCallback {
+        public void FinishedLoading();
+    }
+
+    public FinishedLoadingCallback callback;
+    public void setCallback(FinishedLoadingCallback callback) {
+        this.callback = callback;
+    }
 
     //--------------------------------------------------------------------------
     protected static String TAG="ChangeLogListView";
@@ -112,7 +121,6 @@ public class ChangeLogListView extends ListView implements AdapterView.OnItemCli
             //Changelog.xml file
             mChangeLogFileResourceId = a.getResourceId(R.styleable.ChangeLogListView_changeLogFileResourceId,mChangeLogFileResourceId);
 
-            mChangeLogFileResourceUrl = a.getString(R.styleable.ChangeLogListView_changeLogFileResourceUrl);
             //String which is used in header row for Version
             //mStringVersionHeader= a.getResourceId(R.styleable.ChangeLogListView_StringVersionHeader,mStringVersionHeader);
 
@@ -128,11 +136,7 @@ public class ChangeLogListView extends ListView implements AdapterView.OnItemCli
 
         try{
             //Read and parse changelog.xml
-            XmlParser parse;
-            if (mChangeLogFileResourceUrl!=null)
-                parse = new XmlParser(getContext(),mChangeLogFileResourceUrl);
-            else
-                parse = new XmlParser(getContext(),mChangeLogFileResourceId);
+            XmlParser parse = new XmlParser(getContext(),mChangeLogFileResourceId);
             //ChangeLog chg=parse.readChangeLogFile();
             ChangeLog chg = new ChangeLog();
 
@@ -143,10 +147,7 @@ public class ChangeLogListView extends ListView implements AdapterView.OnItemCli
                 mAdapter.setmRowHeaderLayoutId(mRowHeaderLayoutId);
 
                 //Parse in a separate Thread to avoid UI block with large files
-                if (mChangeLogFileResourceUrl==null || (mChangeLogFileResourceUrl!=null && Util.isConnected(getContext())))
-                    new ParseAsyncTask(mAdapter,parse).execute();
-                else
-                    Toast.makeText(getContext(),R.string.changelog_internal_error_internet_connection,Toast.LENGTH_LONG).show();
+                new ParseAsyncTask(mAdapter,parse).execute();
                 setAdapter(mAdapter);
             }else{
                 setAdapter(null);
@@ -167,16 +168,21 @@ public class ChangeLogListView extends ListView implements AdapterView.OnItemCli
         private XmlParser mParse;
 
         public ParseAsyncTask(ChangeLogAdapter adapter,XmlParser parse){
-            mAdapter=adapter;
-            mParse= parse;
+            mAdapter = adapter;
+            mParse = parse;
+        }
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
         }
 
         @Override
         protected ChangeLog doInBackground(Void... params) {
 
             try{
-                if (mParse!=null){
-                    ChangeLog chg=mParse.readChangeLogFile();
+                if (mParse != null){
+                    ChangeLog chg = mParse.readChangeLogFile();
                     return chg;
                 }
             }catch (Exception e){
@@ -185,15 +191,19 @@ public class ChangeLogListView extends ListView implements AdapterView.OnItemCli
             return null;
         }
 
+        @TargetApi(Build.VERSION_CODES.HONEYCOMB)
         protected void onPostExecute(ChangeLog chg) {
 
+            if(callback != null)
+                callback.FinishedLoading();
+
             //Notify data changed
-            if (chg!=null){
+            if (chg != null){
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB){
                     mAdapter.addAll(chg.getRows());
                 }else{
                     if(chg.getRows()!=null){
-                        for(ChangeLogRow row:chg.getRows()){
+                        for(ChangeLogRow row : chg.getRows()){
                             mAdapter.add(row);
                         }
                     }
@@ -213,8 +223,5 @@ public class ChangeLogListView extends ListView implements AdapterView.OnItemCli
 
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-        //TODO
     }
-
-
 }

@@ -17,6 +17,8 @@ package it.gmariotti.changelibs.library.internal;
 
 import android.content.Context;
 import android.text.Html;
+import android.text.method.LinkMovementMethod;
+import android.text.util.Linkify;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -158,6 +160,12 @@ public class ChangeLogAdapter extends ArrayAdapter<ChangeLogRow> {
                         }else{
                             viewHolder.bulletText.setVisibility(View.GONE);
                         }
+
+                        viewHolder.bulletText.setFocusable(true);
+                        viewHolder.bulletText.setClickable(true);
+                        viewHolder.bulletText.setMovementMethod(LinkMovementMethod.getInstance());
+                        viewHolder.bulletText.setAutoLinkMask(Linkify.ALL);
+                        viewHolder.bulletText.setLinksClickable(true);
                     }
                 }
 

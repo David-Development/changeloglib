@@ -11,8 +11,6 @@
         <!-- Resource id for changelog.xml file. -->
         <attr name="changeLogFileResourceId" format="reference" />
 
-        <!-- Resource url for changelog.xml file. -->
-        <attr name="changeLogFileResourceUrl" format="string" />
 
     </declare-styleable>
 </resources>

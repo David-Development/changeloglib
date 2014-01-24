@@ -22,12 +22,22 @@ import android.util.Xml;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.StringReader;
+import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import it.gmariotti.changelibs.library.Constants;
-import it.gmariotti.changelibs.library.Util;
 import it.gmariotti.changelibs.library.internal.ChangeLog;
 import it.gmariotti.changelibs.library.internal.ChangeLogException;
 import it.gmariotti.changelibs.library.internal.ChangeLogRow;
@@ -70,7 +80,6 @@ public class XmlParser extends BaseParser {
     /** TAG for logging **/
     private static String TAG="XmlParser";
     private int mChangeLogFileResourceId= Constants.mChangeLogFileResourceId;
-    private String mChangeLogFileResourceUrl= null;
 
     //--------------------------------------------------------------------------------
     //TAGs and ATTRIBUTEs in xml file
@@ -111,18 +120,6 @@ public class XmlParser extends BaseParser {
         super(context);
         this.mChangeLogFileResourceId=changeLogFileResourceId;
     }
-
-    /**
-     * Create a new instance for a context and with a custom url .
-     *
-     * @param context  current Context
-     * @param changeLogFileResourceUrl  url with xml files
-     */
-    public XmlParser(Context context,String changeLogFileResourceUrl){
-        super(context);
-        this.mChangeLogFileResourceUrl=changeLogFileResourceUrl;
-    }
-
     //--------------------------------------------------------------------------------
 
 
@@ -138,17 +135,108 @@ public class XmlParser extends BaseParser {
 
         ChangeLog chg=null;
 
-        try {
-            InputStream is=null;
+        ArrayList<String> changelogArr = new ArrayList<String>();
 
-            if (mChangeLogFileResourceUrl!=null){
-                if (Util.isConnected(super.mContext)){
-                    URL url = new URL(mChangeLogFileResourceUrl);
-                    is = url.openStream();
+        try {
+            //InputStream is = mContext.getResources().openRawResource(mChangeLogFileResourceId);
+            URL url = new URL("https://raw.github.com/owncloud/News-Android-App/master/README.md");
+            HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+            try {
+                InputStream isTemp = new BufferedInputStream(urlConnection.getInputStream());
+                BufferedReader in = new BufferedReader(new InputStreamReader(isTemp));
+                String inputLine;
+                while ((inputLine = in.readLine()) != null) {
+                    if(inputLine.startsWith("- "))
+                        inputLine = inputLine.substring(2);
+
+                    changelogArr.add(inputLine.replace("<", "[").replace(">", "]"));
                 }
-            }else{
-                is = mContext.getResources().openRawResource(mChangeLogFileResourceId);
+                    //changelog += inputLine + "<br>";
+                in.close();
+                //readStream(in);
+            } finally {
+                urlConnection.disconnect();
             }
+
+            for(int i = 0; i < changelogArr.size(); i++) {
+                if(changelogArr.get(i).equals("Updates")) {
+                    if(changelogArr.get(i + 1).equals("==================================")) {
+                        changelogArr.subList(0, i+1).clear();
+                        break;
+                    }
+                }
+            }
+
+            //String regex = "((.|\\s)*?)(?=Updates)";
+            //changelog = changelog.substring(changelog.indexOf("Updates<br>=================================="));
+            //changelog = changelog.replaceAll(regex, "");
+            //changelog = changelog.replace("Updates<br>==================================", "").trim();
+            //changelog = changelog.replaceAll("\n", "<br>");
+
+
+            //String[] changelogArr = changelog.split("<br>");
+
+            for(int i = 0; i < changelogArr.size() - 1; i++) {
+                if(i < changelogArr.size()) {
+                    if(changelogArr.get(i + 1).contains("---------------------")) {
+                        changelogArr.set(i, "<changelogversion versionName=\"" + changelogArr.get(i) + "\">");
+                        changelogArr.set(i + 1, "");
+                    } else if(!changelogArr.get(i).equals("==================================")) {
+                        changelogArr.set(i, "<changelogtext>" + changelogArr.get(i).trim() +  "</changelogtext>");
+                    } else {
+                        changelogArr.remove(i);
+                        i--;
+                    }
+
+                }
+            }
+
+            boolean firstOccurence = true;
+            for(int i = 0; i < changelogArr.size(); i++) {
+                if(changelogArr.get(i).equals("<changelogtext></changelogtext>")) {
+                    changelogArr.remove(i);
+                    i--;
+                } else if(changelogArr.get(i).contains("<changelogversion")) {
+                    if(!firstOccurence) {
+                        changelogArr.add(i, "</changelogversion>");
+                        i++;
+                    }
+
+                    firstOccurence = false;
+                }
+            }
+            changelogArr.add("</changelogversion>");
+
+
+            /*
+            Pattern pattern = Pattern.compile("dasad===");
+            Matcher matcher_version = pattern.matcher(changelog);
+
+            StringBuilder sb = new StringBuilder(changelog);
+            while(matcher_version.find()) {
+                String versionNumber = "1";
+                changelog = sb.replace(matcher_version.start(), matcher_version.end(), "<changelogversion versionName=\"" + versionNumber + "\" >").toString();
+                //matcher_version = pattern.matcher(changelog);
+                matcher_version.reset();
+            }*/
+
+            String changelog = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+                    "<changelog bulletedList=\"true\">";
+
+            StringBuilder builder = new StringBuilder(changelog);
+            for (String value : changelogArr) {
+                builder.append(value);
+            }
+            changelog = builder.toString();
+            changelog += "</changelog>";
+
+
+
+            //StringReader sr = new StringReader(changelog);
+            InputStream is = new ByteArrayInputStream(changelog.getBytes());
+
+            //InputStream is = mContext.getResources().openRawResource(mChangeLogFileResourceId);
+
             if (is!=null){
 
                 // Create a new XML Pull Parser.
